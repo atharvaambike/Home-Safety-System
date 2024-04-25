@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP8266 Control Panel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+        h1, h2 {
+            text-align: center;
+            color: #333;
+        }
+        #sensorData {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .sensor-info {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .alert {
+            padding: 10px;
+            background-color: #ffcccc;
+            border: 1px solid #ff3333;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .intruder-distance {
+            margin-top: 5px;
+            font-size: 14px;
+        }
+        .toggle-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .toggle-button:hover {
+            background-color: #45a049;
+        }
+    </style>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>HOME SAFETY SYSTEM CONTROL PANEL</h1>
+
+        <div id="sensorData">
+            <h2>Sensor Data</h2>
+            <div class="sensor-info" id="sensorInfo">
+                <p>Loading data...</p>
+            </div>
+        </div>
+
+        <!-- Toggle button for notification sound -->
+        <button class="toggle-button" id="toggleSoundButton">Toggle Sound</button>
+    </div>
+
+    <!-- Audio element for notification sound -->
+    <audio id="notificationSound" src="notification.wav" preload="auto" loop></audio>
+
+    <script>
+        // Define thresholds
+        const DISTANCE_THRESHOLD = 5 // centimeters
+        const SMOKE_THRESHOLD = 500
+
+        // Variable to track if the notification sound is currently playing
+        var isSoundPlaying = false;
+
+        // Function to toggle notification sound loop
+        function toggleNotificationSound() {
+            var audio = document.getElementById('notificationSound');
+            if (isSoundPlaying) {
+                audio.pause(); // Pause the sound
+            } else {
+                audio.play(); // Play the sound
+            }
+            isSoundPlaying = !isSoundPlaying; // Toggle the sound status
+        }
+
+        // Function to send request
+        function sendRequest(endpoint) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", endpoint, true);
+            xhr.send();
+        }
+
+        // Function to fetch ThingSpeak data
+        function fetchThingSpeakData() {
+            $.getJSON('https://api.thingspeak.com/channels/2518268/feeds.json?api_key=HGLOSQ4ER58JQYRM&results=1', function(data) {
+                var feed = data.feeds[0];
+                var distance = parseFloat(feed.field1);
+                var gasValue = parseInt(feed.field2);
+                var sensorInfoHTML = '<p>Distance: ' + distance + ' cm</p>';
+                sensorInfoHTML += '<p>Gas Value: ' + gasValue + '</p>';
+                $('#sensorInfo').html(sensorInfoHTML);
+
+                if (distance < DISTANCE_THRESHOLD || gasValue > SMOKE_THRESHOLD) {
+                    if (!isSoundPlaying) {
+                        toggleNotificationSound();
+                    }
+                } else {
+                    if (isSoundPlaying) {
+                        toggleNotificationSound();
+                    }
+                }
+
+                var timestamp = new Date().toLocaleString();
+                var alertMessage = '';
+
+                if (distance < DISTANCE_THRESHOLD && gasValue > SMOKE_THRESHOLD) {
+                    showAlert('Fire-Smoke EMERGENCY and Intruder ALERT!!', timestamp, distance);
+                } else if (distance < DISTANCE_THRESHOLD) {
+                    showAlert('Intruder Alert!!', timestamp, distance);
+                } else if (gasValue > SMOKE_THRESHOLD) {
+                    showAlert('Fire-Smoke EMERGENCY!!', timestamp, distance);
+                }
+            });
+        }
+
+        // Function to show alert
+        function showAlert(message, timestamp, distance) {
+            var alertHTML = '<div class="alert">' + message + ' - ' + timestamp;
+            alertHTML += '<div class="intruder-distance">Intruder Distance: ' + distance + ' cm</div>';
+            alertHTML += '</div>';
+            $('#sensorData').append(alertHTML);
+        }
+
+        // Interval to fetch ThingSpeak data
+        setInterval(fetchThingSpeakData, 3000);
+
+        // Document ready function
+        $(document).ready(function() {
+            // Button click event to toggle notification sound loop
+            $('#toggleSoundButton').click(function() {
+                toggleNotificationSound();
+            });
+        });
+    </script>
+</body>
+</html>
